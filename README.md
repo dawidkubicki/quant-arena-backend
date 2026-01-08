@@ -33,11 +33,13 @@ PostgreSQL (Render)
 ### Supabase Setup
 
 1. Create a new Supabase project at https://supabase.com
-2. Go to Project Settings > API
+2. Go to **Project Settings > API**
 3. Copy the following values:
-   - Project URL (`SUPABASE_URL`)
-   - `anon` public key (`SUPABASE_ANON_KEY`)
-   - JWT Secret (Settings > API > JWT Settings > `SUPABASE_JWT_SECRET`)
+   - **Project URL** → `SUPABASE_URL`
+   - **Publishable key** (new format: `sb_publishable_...`) → `SUPABASE_PUBLISHABLE_KEY`
+4. For JWT Secret:
+   - Go to **Project Settings > API > JWT Settings**
+   - Copy **JWT Secret** → `SUPABASE_JWT_SECRET`
 
 ### Installation
 
@@ -59,10 +61,10 @@ export DATABASE_URL="postgresql://user:password@localhost:5432/quant_arena"
 
 # Supabase
 export SUPABASE_URL="https://your-project.supabase.co"
-export SUPABASE_ANON_KEY="your-anon-key"
-export SUPABASE_JWT_SECRET="your-jwt-secret"
+export SUPABASE_PUBLISHABLE_KEY="sb_publishable_xxxxx"
+export SUPABASE_JWT_SECRET="your-jwt-secret-from-jwt-settings"
 
-# Admin emails (comma-separated list of emails that have admin access)
+# Admin emails (JSON array of emails that have admin access)
 export ADMIN_EMAILS='["admin@example.com"]'
 
 # CORS (frontend URL)
@@ -116,9 +118,9 @@ await supabase.auth.signUp({
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SUPABASE_URL` | Supabase project URL | Yes |
-| `SUPABASE_ANON_KEY` | Supabase anon/public key | Yes |
-| `SUPABASE_JWT_SECRET` | Supabase JWT secret for token verification | Yes |
+| `SUPABASE_URL` | Supabase project URL (e.g. `https://xxx.supabase.co`) | Yes |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (`sb_publishable_...`) | Yes |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret (from JWT Settings) | Yes |
 | `ADMIN_EMAILS` | JSON array of admin email addresses | No |
 | `CORS_ORIGINS` | JSON array of allowed CORS origins | No |
 
@@ -144,8 +146,8 @@ await supabase.auth.signUp({
 ```
 DATABASE_URL=<from Render PostgreSQL>
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_JWT_SECRET=your-jwt-secret
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxx
+SUPABASE_JWT_SECRET=your-jwt-secret-from-jwt-settings
 ADMIN_EMAILS=["admin@example.com"]
 CORS_ORIGINS=["https://your-frontend.onrender.com"]
 ```

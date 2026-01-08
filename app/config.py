@@ -7,9 +7,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://localhost:5432/quant_arena"
     
     # Supabase Authentication
-    supabase_url: str = ""
-    supabase_anon_key: str = ""
-    supabase_jwt_secret: str = ""
+    supabase_url: str = ""  # e.g. https://your-project.supabase.co
+    supabase_publishable_key: str = ""  # New: sb_publishable_... (safe for browser)
+    supabase_jwt_secret: str = ""  # From Project Settings > API > JWT Settings
     
     # Admin email (Supabase user email that has admin privileges)
     admin_emails: list[str] = []
