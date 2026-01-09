@@ -423,7 +423,7 @@ Force stop a running round.
 - Useful for stopping simulations that are taking too long or encountering issues
 
 #### DELETE /api/rounds/{round_id}
-Delete a round.
+Delete a round (PENDING or COMPLETED status only).
 
 **Auth Required:** Yes (Admin)
 
@@ -431,6 +431,11 @@ Delete a round.
 ```json
 {"message": "Round deleted successfully"}
 ```
+
+**Notes:**
+- Can delete rounds with status `PENDING` or `COMPLETED`
+- Cannot delete `RUNNING` rounds - use force stop endpoint first
+- Permanently deletes the round and all associated data (agents, results)
 
 ---
 

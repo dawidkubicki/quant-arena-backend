@@ -87,6 +87,10 @@ class AgentResultResponse(BaseModel):
     survival_time: int
     equity_curve: list[float]
     trades: list[dict]
+    # CAPM metrics (alpha/beta relative to SPY)
+    alpha: Optional[float] = None  # Annualized excess return
+    beta: Optional[float] = None   # Market exposure
+    cumulative_alpha: Optional[list[float]] = None  # Running alpha over time
     created_at: datetime
     
     class Config:

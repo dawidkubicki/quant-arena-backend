@@ -14,6 +14,12 @@ class RoundStatus(str, PyEnum):
 
 
 class Round(Base):
+    """
+    A trading simulation round.
+    
+    Contains market configuration and stores price data and SPY benchmark
+    returns after simulation completes.
+    """
     __tablename__ = "rounds"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -21,7 +27,11 @@ class Round(Base):
     status = Column(Enum(RoundStatus), default=RoundStatus.PENDING, nullable=False)
     market_seed = Column(Integer, nullable=False)
     config = Column(JSONB, nullable=False, default=dict)
-    price_data = Column(JSONB, nullable=True)  # Populated after simulation
+    
+    # Market data (populated after simulation)
+    price_data = Column(JSONB, nullable=True)  # AAPL close prices
+    spy_returns = Column(JSONB, nullable=True)  # SPY log returns for alpha/beta
+    
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

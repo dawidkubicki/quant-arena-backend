@@ -23,6 +23,10 @@ class LeaderboardEntry(BaseModel):
     total_trades: int
     survival_time: int
     
+    # CAPM metrics (alpha/beta relative to SPY benchmark)
+    alpha: Optional[float] = None  # Annualized excess return over market
+    beta: Optional[float] = None   # Market exposure coefficient
+    
     # For highlighting
     is_ghost: bool = False
 

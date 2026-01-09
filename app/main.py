@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.api import auth, users, rounds, agents, leaderboard
+from app.api import auth, users, rounds, agents, leaderboard, market_data
 
 settings = get_settings()
 
@@ -26,6 +26,7 @@ app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(rounds.router, prefix="/api/rounds", tags=["Rounds"])
 app.include_router(agents.router, prefix="/api/rounds", tags=["Agents"])
 app.include_router(leaderboard.router, prefix="/api/rounds", tags=["Leaderboard"])
+app.include_router(market_data.router, prefix="/api/market-data", tags=["Market Data"])
 
 
 @app.get("/")

@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     default_num_ticks: int = 1000
     default_initial_price: float = 100.0
     
+    # Twelve Data API
+    twelvedata_api_key: str = ""
+    twelvedata_base_url: str = "https://api.twelvedata.com"
+    
+    # Market Data Settings
+    market_data_symbols: list[str] = ["AAPL", "SPY"]
+    market_data_interval: str = "1min"
+    market_data_trading_interval: str = "5min"
+    
     class Config:
         env_file = ".env"
         extra = "allow"

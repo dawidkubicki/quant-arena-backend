@@ -18,7 +18,7 @@ def get_leaderboard(
     sort_by: str = Query(
         default="sharpe_ratio",
         description="Metric to sort by",
-        enum=["sharpe_ratio", "total_return", "max_drawdown", "calmar_ratio", "win_rate", "survival_time"]
+        enum=["sharpe_ratio", "total_return", "max_drawdown", "calmar_ratio", "win_rate", "survival_time", "alpha", "beta"]
     ),
     ascending: bool = Query(
         default=False,
@@ -84,6 +84,9 @@ def get_leaderboard(
             'win_rate': result.win_rate,
             'total_trades': result.total_trades,
             'survival_time': result.survival_time,
+            # CAPM metrics
+            'alpha': result.alpha,
+            'beta': result.beta,
             'is_ghost': agent.strategy_type == StrategyType.GHOST
         })
     
