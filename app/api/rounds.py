@@ -198,6 +198,40 @@ def start_round(
     )
 
 
+@router.post("/{round_id}/stop", response_model=RoundStatusResponse)
+def force_stop_round(
+    round_id: uuid.UUID,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Force stop a running round (admin only)."""
+    round_obj = db.query(Round).filter(Round.id == round_id).first()
+    
+    if not round_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Round not found"
+        )
+    
+    if round_obj.status != RoundStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Round is not running (current status: {round_obj.status.value})"
+        )
+    
+    # Force stop the round by marking it as completed
+    round_obj.status = RoundStatus.COMPLETED
+    round_obj.completed_at = datetime.utcnow()
+    db.commit()
+    
+    return RoundStatusResponse(
+        id=round_obj.id,
+        status=round_obj.status,
+        started_at=round_obj.started_at,
+        completed_at=round_obj.completed_at
+    )
+
+
 @router.delete("/{round_id}")
 def delete_round(
     round_id: uuid.UUID,

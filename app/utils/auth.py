@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -11,19 +12,41 @@ from app.models.user import User
 settings = get_settings()
 security = HTTPBearer()
 
+# JWKS client to fetch and cache Supabase's public keys
+# The JWKS endpoint provides the public keys used to verify JWT signatures
+_jwks_client: Optional[PyJWKClient] = None
+
+
+def get_jwks_client() -> PyJWKClient:
+    """
+    Get or create the JWKS client for Supabase.
+    The client caches the public keys automatically.
+    """
+    global _jwks_client
+    if _jwks_client is None:
+        jwks_url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
+    return _jwks_client
+
 
 def verify_supabase_token(token: str) -> dict:
     """
     Verify a Supabase JWT token and return the payload.
     
-    The token is signed with the Supabase JWT secret.
+    Uses Supabase's JWKS endpoint to fetch the public key for ES256 verification.
+    This supports the new JWT Signing Keys (ECC P-256) instead of the legacy HS256 secret.
     """
     try:
-        # Supabase uses HS256 algorithm with the JWT secret
+        # Get the signing key from JWKS endpoint
+        jwks_client = get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        
+        # Verify and decode the token using the public key
+        # ES256 is used for ECC P-256 keys
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256"],
             audience="authenticated"
         )
         return payload
@@ -37,6 +60,12 @@ def verify_supabase_token(token: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token verification failed: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
