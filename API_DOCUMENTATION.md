@@ -132,15 +132,14 @@ Admin users are determined by their email. Emails listed in the `ADMIN_EMAILS` e
     rsi_oversold: number;       // Default: 30
   },
   signal_stack: {
-    use_sma: boolean;
-    sma_window: number;
-    use_rsi: boolean;
-    rsi_window: number;
-    rsi_overbought: number;
-    rsi_oversold: number;
-    use_volatility_filter: boolean;
-    volatility_window: number;
-    volatility_threshold: number;
+    // SMA Trend Filter - only allow longs above SMA, shorts below SMA
+    use_sma_trend_filter: boolean;   // Default: false
+    sma_filter_window: number;       // Default: 50
+    
+    // Volatility Filter - reduce confidence in high volatility
+    use_volatility_filter: boolean;  // Default: false
+    volatility_window: number;       // Default: 20
+    volatility_threshold: number;    // Default: 1.5
   },
   risk_params: {
     position_size_pct: number;  // Default: 10 (%)
@@ -208,6 +207,30 @@ Admin users are determined by their email. Emails listed in the `ADMIN_EMAILS` e
   total_trades: number;
   survival_time: number;
   is_ghost: boolean;           // True for benchmark agent
+}
+```
+
+### Global Leaderboard Entry
+
+```typescript
+{
+  rank: number;
+  user_id: string;
+  nickname: string;
+  color: string;
+  icon: string;
+  total_rounds: number;                // Number of rounds participated in
+  avg_sharpe_ratio: number | null;     // Average Sharpe ratio across all rounds
+  best_sharpe_ratio: number | null;    // Best single-round Sharpe ratio
+  avg_total_return: number;            // Average total return across all rounds
+  best_total_return: number;           // Best single-round total return
+  avg_alpha: number | null;            // Average alpha across all rounds
+  best_alpha: number | null;           // Best single-round alpha
+  first_place_count: number;           // Number of 1st place finishes
+  top_3_count: number;                 // Number of top 3 finishes
+  top_10_count: number;                // Number of top 10 finishes
+  win_rate: number;                    // Percentage of top 3 finishes
+  performance_score: number;           // Weighted performance metric
 }
 ```
 
@@ -457,12 +480,11 @@ Create or update agent configuration for a round.
       "exit_threshold": 0.5
     },
     "signal_stack": {
-      "use_sma": true,
-      "sma_window": 20,
-      "use_rsi": true,
-      "rsi_window": 14,
-      "rsi_overbought": 70,
-      "rsi_oversold": 30
+      "use_sma_trend_filter": false,
+      "sma_filter_window": 50,
+      "use_volatility_filter": false,
+      "volatility_window": 20,
+      "volatility_threshold": 1.5
     },
     "risk_params": {
       "position_size_pct": 10,
@@ -572,6 +594,87 @@ Get current user's ranking in a round.
   "sharpe_ratio": 1.2,
   "max_drawdown": 12.0,
   "percentile": 70.0
+}
+```
+
+---
+
+### Global Leaderboard
+
+#### GET /api/leaderboard/global
+Get the global leaderboard aggregating user performance across all completed rounds.
+
+**Query Parameters:**
+- `sort_by` (optional): Metric to sort by
+  - `performance_score` (default) - Weighted combination of metrics
+  - `avg_sharpe_ratio` - Average Sharpe ratio
+  - `avg_total_return` - Average total return
+  - `total_rounds` - Number of rounds participated
+  - `win_rate` - Percentage of top 3 finishes
+  - `avg_alpha` - Average alpha
+- `limit` (optional): Number of users to return (default: 100, max: 500)
+- `offset` (optional): Number of users to skip for pagination (default: 0)
+
+**Response:**
+```json
+{
+  "entries": [
+    {
+      "rank": 1,
+      "user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "nickname": "TraderJoe",
+      "color": "#3B82F6",
+      "icon": "chart",
+      "total_rounds": 5,
+      "avg_sharpe_ratio": 1.8,
+      "best_sharpe_ratio": 2.5,
+      "avg_total_return": 12.5,
+      "best_total_return": 18.0,
+      "avg_alpha": 5.2,
+      "best_alpha": 8.5,
+      "first_place_count": 2,
+      "top_3_count": 4,
+      "top_10_count": 5,
+      "win_rate": 80.0,
+      "performance_score": 85.5
+    }
+  ],
+  "total_users": 25,
+  "total_rounds_analyzed": 10,
+  "highest_avg_sharpe": 1.8,
+  "highest_avg_return": 12.5,
+  "most_rounds_participated": 8
+}
+```
+
+**Performance Score Calculation:**
+The performance score is a weighted metric (0-100 scale) combining:
+- Average Sharpe ratio (40%)
+- Win rate - top 3 finishes (30%)
+- Average alpha (20%)
+- Total rounds participated (10%)
+
+#### GET /api/leaderboard/global/me?user_id={user_id}
+Get the current user's global ranking across all completed rounds.
+
+**Query Parameters:**
+- `user_id`: User ID to get ranking for
+
+**Response:**
+```json
+{
+  "rank": 3,
+  "total_users": 25,
+  "total_rounds": 5,
+  "avg_sharpe_ratio": 1.5,
+  "avg_total_return": 10.2,
+  "avg_alpha": 4.5,
+  "win_rate": 60.0,
+  "first_place_count": 1,
+  "top_3_count": 3,
+  "top_10_count": 5,
+  "performance_score": 78.3,
+  "percentile": 88.0
 }
 ```
 
@@ -744,3 +847,97 @@ All errors follow this format:
 | `SUPABASE_JWT_SECRET` | Supabase JWT secret for token verification |
 | `ADMIN_EMAILS` | JSON array of admin email addresses |
 | `CORS_ORIGINS` | JSON array of allowed frontend origins |
+
+---
+
+## Trade Tracking Endpoints
+
+### Get All Trades for an Agent
+
+Retrieve the complete trade history for a specific agent.
+
+**Endpoint:** `GET /api/trades/agent/{agent_id}`
+
+**Response:**
+```json
+{
+  "trades": [
+    {
+      "id": "uuid",
+      "agent_id": "uuid",
+      "tick": 45,
+      "action": "OPEN_LONG",
+      "price": 152.34,
+      "executed_price": 152.49,
+      "size": 65.0,
+      "cost": 9.91,
+      "pnl": 0.0,
+      "equity_after": 99990.09,
+      "reason": "Mean reversion signal: z-score = -2.15",
+      "created_at": "2026-01-10T10:30:45.123456"
+    }
+  ],
+  "total_trades": 24,
+  "total_pnl": 2456.78,
+  "winning_trades": 12,
+  "losing_trades": 8,
+  "win_rate": 60.0
+}
+```
+
+### Get Trade Summary for an Agent
+
+Retrieve aggregated trade statistics without the full trade list.
+
+**Endpoint:** `GET /api/trades/agent/{agent_id}/summary`
+
+**Response:**
+```json
+{
+  "agent_id": "uuid",
+  "total_trades": 24,
+  "total_closing_trades": 12,
+  "total_pnl": 2456.78,
+  "win_rate": 58.33,
+  "avg_winning_trade": 485.23,
+  "avg_losing_trade": -234.56,
+  "largest_win": 892.45,
+  "largest_loss": -456.78,
+  "winning_trades": 7,
+  "losing_trades": 5
+}
+```
+
+### Get Trades for All Agents in a Round
+
+Retrieve trades for all participants in a specific round.
+
+**Endpoint:** `GET /api/trades/round/{round_id}/all-trades`
+
+**Response:**
+```json
+{
+  "round_id": "uuid",
+  "total_agents": 3,
+  "total_trades": 72,
+  "trades_by_agent": {
+    "agent_id_1": {
+      "agent_id": "uuid",
+      "user_id": "uuid",
+      "strategy_type": "MEAN_REVERSION",
+      "trade_count": 24,
+      "trades": [...]
+    }
+  }
+}
+```
+
+**Trade Action Types:**
+- `OPEN_LONG`: Enter a long (buy) position
+- `CLOSE_LONG`: Exit a long position (sell)
+- `OPEN_SHORT`: Enter a short (sell) position
+- `CLOSE_SHORT`: Exit a short position (buy to cover)
+
+**Note:** Only closing trades have non-zero P&L values.
+
+For detailed usage examples and frontend integration, see [TRADE_TRACKING_GUIDE.md](./TRADE_TRACKING_GUIDE.md).

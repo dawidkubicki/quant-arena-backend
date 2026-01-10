@@ -38,10 +38,11 @@ class AgentResult(Base):
     beta = Column(Float, nullable=True)
     
     # Cumulative alpha over time (for visualization)
+    # Each stores list of {tick, timestamp, value} objects for charting
     cumulative_alpha = Column(JSONB, nullable=False, default=list)
     
     # Detailed data
-    equity_curve = Column(JSONB, nullable=False, default=list)  # Array of equity values
+    equity_curve = Column(JSONB, nullable=False, default=list)  # Array of {tick, timestamp, value} objects
     trades = Column(JSONB, nullable=False, default=list)  # Array of trade records
     
     created_at = Column(DateTime, default=datetime.utcnow)

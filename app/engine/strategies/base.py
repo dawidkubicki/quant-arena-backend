@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 
 class Action(Enum):
     LONG = "LONG"
-    SHORT = "SHORT"
+    SHORT = "SHORT"  # Kept for backwards compatibility, but strategies should not generate this
     FLAT = "FLAT"
 
 
@@ -20,7 +20,16 @@ class Signal:
 
 
 class BaseStrategy(ABC):
-    """Base class for all trading strategies."""
+    """
+    Base class for all trading strategies.
+    
+    Note: Strategies are LONG-ONLY. They can only:
+    - Go LONG (buy/enter position)
+    - Go FLAT (sell/exit position)
+    
+    SHORT positions are not supported. Any SHORT signal will be 
+    converted to FLAT (sell signal) by enforce_long_only().
+    """
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -43,37 +52,72 @@ class BaseStrategy(ABC):
         pass
     
     def apply_signal_filters(self, signal: Signal, indicators: Dict[str, Any]) -> Signal:
-        """Apply additional signal filters from signal_stack config."""
+        """
+        Apply universal signal filters from signal_stack config.
+        
+        These filters apply to ALL strategy types and can reduce confidence
+        or block signals based on market conditions.
+        """
         confidence = signal.confidence
+        filter_reasons = []
         
-        # RSI filter
-        if self.signal_stack.get('use_rsi', False):
-            rsi = indicators.get('rsi')
-            if rsi is not None:
-                overbought = self.signal_stack.get('rsi_overbought', 70)
-                oversold = self.signal_stack.get('rsi_oversold', 30)
+        # SMA Trend Filter
+        # Only allow longs above SMA (uptrend)
+        if self.signal_stack.get('use_sma_trend_filter', False):
+            sma = indicators.get('sma')
+            current_price = indicators.get('current_price')
+            
+            if sma is not None and current_price is not None:
+                price_above_sma = current_price > sma
                 
-                # Reduce confidence if RSI contradicts the signal
-                if signal.action == Action.LONG and rsi > overbought:
+                # Reduce confidence if trying to go long below SMA (against trend)
+                if signal.action == Action.LONG and not price_above_sma:
                     confidence *= 0.5
-                elif signal.action == Action.SHORT and rsi < oversold:
-                    confidence *= 0.5
+                    filter_reasons.append("price below SMA")
         
-        # Volatility filter
+        # Volatility Filter
+        # Reduce confidence in high volatility environments
         if self.signal_stack.get('use_volatility_filter', False):
             vol = indicators.get('volatility')
             if vol is not None:
                 threshold = self.signal_stack.get('volatility_threshold', 1.5)
+                base_volatility = 0.02  # ~20% annualized as baseline
+                
                 # High volatility reduces confidence
-                if vol > threshold * 0.02:  # Compare to base volatility
+                if vol > threshold * base_volatility:
                     confidence *= 0.7
+                    filter_reasons.append("high volatility")
+        
+        # Build updated reason if filters applied
+        reason = signal.reason
+        if filter_reasons:
+            reason = f"{signal.reason} [filtered: {', '.join(filter_reasons)}]"
         
         return Signal(
             action=signal.action,
             confidence=confidence,
-            reason=signal.reason,
+            reason=reason,
             indicators=indicators
         )
+    
+    def enforce_long_only(self, signal: Signal) -> Signal:
+        """
+        Enforce long-only constraint. Converts SHORT signals to FLAT (exit).
+        
+        This ensures strategies can only:
+        - LONG: Buy/enter a long position
+        - FLAT: Sell/exit position (no position)
+        
+        SHORT signals are converted to FLAT with an updated reason.
+        """
+        if signal.action == Action.SHORT:
+            return Signal(
+                action=Action.FLAT,
+                confidence=signal.confidence,
+                reason=f"{signal.reason} [long-only: converted to exit]",
+                indicators=signal.indicators
+            )
+        return signal
     
     def get_position_size(self, equity: float, price: float) -> float:
         """Calculate position size based on risk parameters."""

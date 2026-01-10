@@ -189,14 +189,22 @@ CORS_ORIGINS=["https://your-frontend.onrender.com"]
 ### Mean Reversion
 Bets on price returning to the moving average when it deviates significantly.
 - Parameters: `lookback_window`, `entry_threshold`, `exit_threshold`
+- Best for: Range-bound, choppy markets
 
 ### Trend Following
 Follows market trends using moving average crossovers.
 - Parameters: `fast_window`, `slow_window`, `atr_multiplier`
+- Best for: Trending markets with clear directional moves
 
 ### Momentum
 Buys strength and sells weakness based on price momentum and RSI.
 - Parameters: `momentum_window`, `rsi_window`, `rsi_overbought`, `rsi_oversold`
+- Best for: Markets with strong momentum and clear overbought/oversold conditions
+
+### Signal Stack (Universal Filters)
+Additional filters that apply to ALL strategies to modify signal confidence:
+- `use_sma_trend_filter`: Only allow longs above SMA, shorts below SMA
+- `use_volatility_filter`: Reduce confidence in high volatility environments
 
 ## License
 

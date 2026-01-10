@@ -54,14 +54,28 @@ class RoundCreate(BaseModel):
     config: RoundConfig = Field(default_factory=RoundConfig)
 
 
+class ChartDataPoint(BaseModel):
+    """Data point for charts with both x and y values."""
+    tick: int
+    timestamp: Optional[datetime] = None  # ISO timestamp, None for synthetic data
+    value: float
+
+
 class RoundResponse(BaseModel):
     id: UUID
     name: str
     status: RoundStatus
     market_seed: int
     config: dict
-    price_data: Optional[List[float]] = None
-    spy_returns: Optional[List[float]] = None  # SPY log returns for alpha/beta
+    
+    # Chart data with x-axis (tick/timestamp) and y-axis (value)
+    price_data: Optional[List[ChartDataPoint]] = None  # AAPL prices over time
+    spy_returns: Optional[List[ChartDataPoint]] = None  # SPY returns over time
+    
+    # Legacy fields (deprecated but kept for backward compatibility)
+    price_data_values: Optional[List[float]] = None
+    spy_returns_values: Optional[List[float]] = None
+    
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
@@ -86,5 +100,12 @@ class RoundListResponse(BaseModel):
 class RoundStatusResponse(BaseModel):
     id: UUID
     status: RoundStatus
+    progress: int = 0  # 0-100 percentage
+    agents_processed: int = 0
+    total_agents: int = 0
+    error_message: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True

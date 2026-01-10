@@ -1,17 +1,23 @@
 from typing import List, Dict, Any
 from app.engine.strategies.base import BaseStrategy, Signal, Action
-from app.utils.indicators import sma, ema, atr_from_prices, rsi, volatility
+from app.utils.indicators import sma, ema, atr_from_prices, volatility
 
 
 class TrendFollowingStrategy(BaseStrategy):
     """
-    Trend Following Strategy
+    Trend Following Strategy (LONG-ONLY)
     
-    Logic: Follow the trend using moving average crossovers.
+    Logic: Follow uptrends using moving average crossovers. This strategy can only go long.
     
-    - Go LONG when fast MA crosses above slow MA (uptrend)
-    - Go SHORT when fast MA crosses below slow MA (downtrend)
-    - Use ATR for position sizing and stop placement
+    Strategy Parameters:
+    - fast_window: Fast EMA period (shorter = more responsive)
+    - slow_window: Slow EMA period (longer = smoother trend)
+    - atr_multiplier: ATR multiplier for volatility-adjusted signals
+    
+    Signal Generation (Long-Only):
+    - Go LONG when fast EMA crosses above slow EMA (bullish crossover)
+    - Go FLAT (exit) when fast EMA crosses below slow EMA (bearish crossover)
+    - Stay in long position until bearish crossover occurs
     """
     
     def __init__(self, config: Dict[str, Any]):
@@ -20,22 +26,25 @@ class TrendFollowingStrategy(BaseStrategy):
         self.prev_slow_ma = None
     
     def generate_signal(self, prices: List[float], current_position: Action) -> Signal:
+        # Strategy-specific parameters
         fast_window = self.strategy_params.get('fast_window', 10)
         slow_window = self.strategy_params.get('slow_window', 30)
         atr_multiplier = self.strategy_params.get('atr_multiplier', 2.0)
         
-        # Calculate indicators
+        # Calculate core strategy indicators
         fast_ma = ema(prices, fast_window)
         slow_ma = ema(prices, slow_window)
         current_atr = atr_from_prices(prices, 14)
-        current_rsi = rsi(prices, self.signal_stack.get('rsi_window', 14))
+        
+        # Calculate indicators for signal_stack filters
+        filter_sma = sma(prices, self.signal_stack.get('sma_filter_window', 50))
         current_vol = volatility(prices, self.signal_stack.get('volatility_window', 20))
         
         indicators = {
             'fast_ma': fast_ma,
             'slow_ma': slow_ma,
+            'sma': filter_sma,  # For trend filter
             'atr': current_atr,
-            'rsi': current_rsi,
             'volatility': current_vol,
             'current_price': prices[-1] if prices else None
         }
@@ -67,7 +76,7 @@ class TrendFollowingStrategy(BaseStrategy):
         self.prev_fast_ma = fast_ma
         self.prev_slow_ma = slow_ma
         
-        # Generate signal
+        # Generate signal (LONG-ONLY)
         if crossover_up:
             # Calculate trend strength
             trend_strength = (fast_ma - slow_ma) / slow_ma if slow_ma else 0
@@ -78,13 +87,14 @@ class TrendFollowingStrategy(BaseStrategy):
                 reason=f"Bullish crossover (fast MA: {fast_ma:.2f}, slow MA: {slow_ma:.2f})",
                 indicators=indicators
             )
-        elif crossover_down:
+        elif crossover_down and current_position == Action.LONG:
+            # Bearish crossover - EXIT long position
             trend_strength = (slow_ma - fast_ma) / slow_ma if slow_ma else 0
             confidence = min(abs(trend_strength) * 50 + 0.6, 1.0)
             signal = Signal(
-                action=Action.SHORT,
+                action=Action.FLAT,
                 confidence=confidence,
-                reason=f"Bearish crossover (fast MA: {fast_ma:.2f}, slow MA: {slow_ma:.2f})",
+                reason=f"Bearish crossover, exit long (fast MA: {fast_ma:.2f}, slow MA: {slow_ma:.2f})",
                 indicators=indicators
             )
         elif fast_ma > slow_ma and current_position != Action.LONG:
@@ -93,25 +103,34 @@ class TrendFollowingStrategy(BaseStrategy):
             signal = Signal(
                 action=Action.LONG,
                 confidence=confidence,
-                reason="Uptrend continuation",
+                reason="Uptrend continuation, entering long",
                 indicators=indicators
             )
-        elif fast_ma < slow_ma and current_position != Action.SHORT:
-            # In downtrend but not short - consider entry
-            confidence = 0.4
+        elif fast_ma > slow_ma and current_position == Action.LONG:
+            # In uptrend and already long - hold
             signal = Signal(
-                action=Action.SHORT,
-                confidence=confidence,
-                reason="Downtrend continuation",
+                action=Action.LONG,
+                confidence=0.5,
+                reason="Holding long in uptrend",
+                indicators=indicators
+            )
+        elif fast_ma < slow_ma and current_position == Action.LONG:
+            # In downtrend with long position - exit
+            signal = Signal(
+                action=Action.FLAT,
+                confidence=0.5,
+                reason="Downtrend detected, exiting long",
                 indicators=indicators
             )
         else:
-            # Hold current position
+            # No position in downtrend - stay flat
             signal = Signal(
-                action=current_position,
-                confidence=0.5,
-                reason="Holding current trend position",
+                action=Action.FLAT,
+                confidence=0.4,
+                reason="Downtrend, staying flat (long-only)",
                 indicators=indicators
             )
         
-        return self.apply_signal_filters(signal, indicators)
+        # Apply filters and enforce long-only
+        filtered_signal = self.apply_signal_filters(signal, indicators)
+        return self.enforce_long_only(filtered_signal)

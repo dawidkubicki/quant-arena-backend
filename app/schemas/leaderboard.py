@@ -42,3 +42,40 @@ class LeaderboardResponse(BaseModel):
     best_return: Optional[float] = None
     lowest_drawdown: Optional[float] = None
     average_survival: Optional[float] = None
+
+
+class GlobalLeaderboardEntry(BaseModel):
+    rank: int
+    user_id: UUID
+    nickname: str
+    color: str
+    icon: str
+    
+    # Aggregate statistics
+    total_rounds: int  # Number of rounds participated in
+    avg_sharpe_ratio: Optional[float]  # Average Sharpe ratio across all rounds
+    best_sharpe_ratio: Optional[float]  # Best single-round Sharpe ratio
+    avg_total_return: float  # Average total return across all rounds
+    best_total_return: float  # Best single-round total return
+    avg_alpha: Optional[float]  # Average alpha across all rounds
+    best_alpha: Optional[float]  # Best single-round alpha
+    
+    # Win statistics
+    first_place_count: int  # Number of 1st place finishes
+    top_3_count: int  # Number of top 3 finishes
+    top_10_count: int  # Number of top 10 finishes
+    win_rate: float  # Percentage of top 3 finishes
+    
+    # Overall performance score (weighted metric)
+    performance_score: float
+
+
+class GlobalLeaderboardResponse(BaseModel):
+    entries: list[GlobalLeaderboardEntry]
+    total_users: int
+    total_rounds_analyzed: int
+    
+    # Summary stats
+    highest_avg_sharpe: Optional[float] = None
+    highest_avg_return: Optional[float] = None
+    most_rounds_participated: int = 0

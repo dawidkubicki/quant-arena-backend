@@ -5,13 +5,14 @@ from app.utils.indicators import momentum, rsi, sma, volatility
 
 class MomentumStrategy(BaseStrategy):
     """
-    Momentum Strategy
+    Momentum Strategy (LONG-ONLY)
     
-    Logic: Buy strength, sell weakness based on price momentum and RSI.
+    Logic: Buy strength based on price momentum and RSI. This strategy can only go long.
     
+    Signal Generation (Long-Only):
     - Go LONG when momentum is positive and RSI is not overbought
-    - Go SHORT when momentum is negative and RSI is not oversold
-    - Use RSI to avoid buying at tops and selling at bottoms
+    - Go FLAT (exit) when momentum turns negative or RSI is overbought
+    - Use RSI to avoid buying at tops
     """
     
     def generate_signal(self, prices: List[float], current_position: Action) -> Signal:
@@ -23,7 +24,8 @@ class MomentumStrategy(BaseStrategy):
         # Calculate indicators
         current_momentum = momentum(prices, momentum_window)
         current_rsi = rsi(prices, rsi_window)
-        current_sma = sma(prices, self.signal_stack.get('sma_window', 20))
+        # SMA for signal_stack trend filter (if enabled)
+        current_sma = sma(prices, self.signal_stack.get('sma_filter_window', 50))
         current_vol = volatility(prices, self.signal_stack.get('volatility_window', 20))
         
         indicators = {
@@ -43,7 +45,7 @@ class MomentumStrategy(BaseStrategy):
                 indicators=indicators
             )
         
-        # Strong positive momentum + RSI not overbought
+        # Strong positive momentum + RSI not overbought -> GO LONG
         if current_momentum > 2.0 and current_rsi < rsi_overbought:
             # Scale confidence with momentum strength
             confidence = min(current_momentum / 10.0 + 0.4, 1.0)
@@ -53,16 +55,16 @@ class MomentumStrategy(BaseStrategy):
                 reason=f"Strong positive momentum ({current_momentum:.2f}%), RSI: {current_rsi:.1f}",
                 indicators=indicators
             )
-        # Strong negative momentum + RSI not oversold
-        elif current_momentum < -2.0 and current_rsi > rsi_oversold:
+        # Strong negative momentum -> EXIT any long position
+        elif current_momentum < -2.0 and current_position == Action.LONG:
             confidence = min(abs(current_momentum) / 10.0 + 0.4, 1.0)
             signal = Signal(
-                action=Action.SHORT,
+                action=Action.FLAT,
                 confidence=confidence,
-                reason=f"Strong negative momentum ({current_momentum:.2f}%), RSI: {current_rsi:.1f}",
+                reason=f"Negative momentum, exit signal ({current_momentum:.2f}%), RSI: {current_rsi:.1f}",
                 indicators=indicators
             )
-        # RSI overbought - potential reversal, reduce/exit long
+        # RSI overbought - potential reversal, exit long
         elif current_rsi > rsi_overbought and current_position == Action.LONG:
             signal = Signal(
                 action=Action.FLAT,
@@ -70,29 +72,31 @@ class MomentumStrategy(BaseStrategy):
                 reason=f"RSI overbought ({current_rsi:.1f}), exiting long",
                 indicators=indicators
             )
-        # RSI oversold - potential reversal, reduce/exit short
-        elif current_rsi < rsi_oversold and current_position == Action.SHORT:
-            signal = Signal(
-                action=Action.FLAT,
-                confidence=0.7,
-                reason=f"RSI oversold ({current_rsi:.1f}), exiting short",
-                indicators=indicators
-            )
-        # Weak or no momentum
-        elif abs(current_momentum) < 1.0:
+        # Weak or negative momentum - stay flat or exit
+        elif current_momentum < 1.0 and current_position == Action.LONG:
             signal = Signal(
                 action=Action.FLAT,
                 confidence=0.6,
-                reason=f"Weak momentum ({current_momentum:.2f}%)",
+                reason=f"Weak/negative momentum ({current_momentum:.2f}%), exiting long",
+                indicators=indicators
+            )
+        # Holding long with moderate positive momentum
+        elif current_position == Action.LONG and current_momentum > 0:
+            signal = Signal(
+                action=Action.LONG,
+                confidence=0.5,
+                reason=f"Holding long, momentum still positive ({current_momentum:.2f}%)",
                 indicators=indicators
             )
         else:
-            # Hold current position
+            # No position or waiting for entry
             signal = Signal(
-                action=current_position,
+                action=Action.FLAT,
                 confidence=0.4,
-                reason="Moderate momentum, holding position",
+                reason=f"No entry signal, momentum: {current_momentum:.2f}%",
                 indicators=indicators
             )
         
-        return self.apply_signal_filters(signal, indicators)
+        # Apply filters and enforce long-only
+        filtered_signal = self.apply_signal_filters(signal, indicators)
+        return self.enforce_long_only(filtered_signal)

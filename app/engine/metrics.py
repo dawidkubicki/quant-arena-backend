@@ -417,8 +417,8 @@ def calculate_all_metrics(
     Returns:
         Dictionary with all metrics
     """
-    final_equity = equity_curve[-1] if equity_curve else initial_equity
-    total_return = (final_equity - initial_equity) / initial_equity * 100
+    final_equity = float(equity_curve[-1]) if equity_curve else float(initial_equity)
+    total_return = float((final_equity - initial_equity) / initial_equity * 100)
     
     metrics = {
         'final_equity': final_equity,

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 from app.engine.strategies.base import Action
 
 
@@ -7,14 +8,15 @@ from app.engine.strategies.base import Action
 class Trade:
     """Record of a single trade."""
     tick: int
-    action: str  # "OPEN_LONG", "CLOSE_LONG", "OPEN_SHORT", "CLOSE_SHORT"
-    price: float
-    executed_price: float  # Price after slippage
-    size: float
-    cost: float  # Transaction cost (fees)
-    pnl: float  # Realized P&L (0 for opening trades)
-    equity_after: float
-    reason: str
+    timestamp: Optional[datetime] = None  # Market timestamp (None for synthetic data)
+    action: str = ""  # "OPEN_LONG", "CLOSE_LONG", "OPEN_SHORT", "CLOSE_SHORT"
+    price: float = 0.0
+    executed_price: float = 0.0  # Price after slippage
+    size: float = 0.0
+    cost: float = 0.0  # Transaction cost (fees)
+    pnl: float = 0.0  # Realized P&L (0 for opening trades)
+    equity_after: float = 0.0
+    reason: str = ""
 
 
 @dataclass
@@ -91,11 +93,22 @@ class ExecutionEngine:
         position_size: float,
         volatility: float,
         reason: str,
-        risk_params: Dict[str, Any]
+        risk_params: Dict[str, Any],
+        timestamp: Optional[datetime] = None
     ) -> Optional[Trade]:
         """
         Execute a trade if conditions are met.
         Returns Trade object if executed, None otherwise.
+        
+        Args:
+            tick: Tick number
+            target_action: Desired position
+            price: Current market price
+            position_size: Size of position
+            volatility: Current volatility
+            reason: Reason for trade
+            risk_params: Risk management parameters
+            timestamp: Market timestamp (None for synthetic data)
         """
         if self.state.is_killed:
             return None
@@ -110,7 +123,7 @@ class ExecutionEngine:
         
         # Close existing position first
         if current_position != Action.FLAT:
-            trade = self._close_position(tick, price, volatility, reason)
+            trade = self._close_position(tick, price, volatility, reason, timestamp)
         
         # Open new position if not going flat
         if target_action != Action.FLAT and not self.state.is_killed:
@@ -119,7 +132,7 @@ class ExecutionEngine:
             actual_size = min(position_size, max_position_value / price)
             
             if actual_size > 0:
-                trade = self._open_position(tick, target_action, price, actual_size, volatility, reason)
+                trade = self._open_position(tick, target_action, price, actual_size, volatility, reason, timestamp)
         
         return trade
     
@@ -130,7 +143,8 @@ class ExecutionEngine:
         price: float,
         size: float,
         volatility: float,
-        reason: str
+        reason: str,
+        timestamp: Optional[datetime] = None
     ) -> Trade:
         """Open a new position."""
         executed_price = self.calculate_slippage(price, action, volatility)
@@ -148,6 +162,7 @@ class ExecutionEngine:
         
         trade = Trade(
             tick=tick,
+            timestamp=timestamp,
             action=f"OPEN_{action.value}",
             price=price,
             executed_price=executed_price,
@@ -166,7 +181,8 @@ class ExecutionEngine:
         tick: int,
         price: float,
         volatility: float,
-        reason: str
+        reason: str,
+        timestamp: Optional[datetime] = None
     ) -> Trade:
         """Close current position."""
         pos = self.state.position
@@ -186,19 +202,31 @@ class ExecutionEngine:
         else:  # SHORT
             pnl = (pos.entry_price - executed_price) * pos.size - fees
         
-        # Update state
-        self.state.cash += notional - fees
-        self.state.equity += pnl
+        # Update cash based on position type
+        # For LONG: we sell shares, receive exit notional minus fees
+        # For SHORT: we return our invested position value, adjusted by P&L
+        if pos.action == Action.LONG:
+            self.state.cash += notional - fees
+        else:  # SHORT
+            # When we opened SHORT, we "invested" entry_price * size
+            # Now we close and get back that investment +/- P&L
+            # P&L already includes closing fees, so we add opening value + pnl
+            self.state.cash += pos.entry_price * pos.size + pnl
+        
+        # Update equity immediately (since position is now FLAT, equity = cash)
+        # This ensures correct position sizing if we immediately open a new position
+        self.state.equity = self.state.cash
         
         trade = Trade(
             tick=tick,
+            timestamp=timestamp,
             action=f"CLOSE_{pos.action.value}",
             price=price,
             executed_price=executed_price,
             size=pos.size,
             cost=fees,
             pnl=pnl,
-            equity_after=self.state.equity,
+            equity_after=self.state.cash,  # After close, equity = cash (no position)
             reason=reason
         )
         
@@ -242,11 +270,19 @@ class ExecutionEngine:
         tick: int,
         current_price: float,
         risk_params: Dict[str, Any],
-        volatility: float
+        volatility: float,
+        timestamp: Optional[datetime] = None
     ) -> bool:
         """
         Check and enforce risk limits.
         Returns True if position was killed.
+        
+        Args:
+            tick: Current tick number
+            current_price: Current market price
+            risk_params: Risk management parameters
+            volatility: Current market volatility
+            timestamp: Market timestamp (None for synthetic data)
         """
         if self.state.is_killed:
             return True
@@ -267,19 +303,19 @@ class ExecutionEngine:
         
         # Stop loss hit
         if position_pnl_pct <= -stop_loss_pct:
-            self._close_position(tick, current_price, volatility, f"Stop loss hit ({position_pnl_pct:.2f}%)")
+            self._close_position(tick, current_price, volatility, f"Stop loss hit ({position_pnl_pct:.2f}%)", timestamp)
             return False
         
         # Take profit hit
         if position_pnl_pct >= take_profit_pct:
-            self._close_position(tick, current_price, volatility, f"Take profit hit ({position_pnl_pct:.2f}%)")
+            self._close_position(tick, current_price, volatility, f"Take profit hit ({position_pnl_pct:.2f}%)", timestamp)
             return False
         
         # Max drawdown kill switch
         if self.state.max_drawdown >= max_dd_kill:
             # Close any position and kill the agent
             if pos.action != Action.FLAT:
-                self._close_position(tick, current_price, volatility, "Max drawdown kill switch")
+                self._close_position(tick, current_price, volatility, "Max drawdown kill switch", timestamp)
             self.state.is_killed = True
             self.state.kill_reason = f"Max drawdown ({self.state.max_drawdown:.2f}%) exceeded limit ({max_dd_kill}%)"
             return True
@@ -298,6 +334,7 @@ class ExecutionEngine:
             'trades': [
                 {
                     'tick': t.tick,
+                    'timestamp': t.timestamp,
                     'action': t.action,
                     'price': t.price,
                     'executed_price': t.executed_price,

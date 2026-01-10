@@ -192,9 +192,9 @@ class RealMarketEngine:
         })
         
         # Fill NaN values for first rows (no return yet)
-        self._aligned_df["aapl_log_return"].fillna(0, inplace=True)
-        self._aligned_df["spy_log_return"].fillna(0, inplace=True)
-        self._aligned_df["volatility"].fillna(0.02, inplace=True)  # Default 2% vol
+        self._aligned_df["aapl_log_return"] = self._aligned_df["aapl_log_return"].fillna(0)
+        self._aligned_df["spy_log_return"] = self._aligned_df["spy_log_return"].fillna(0)
+        self._aligned_df["volatility"] = self._aligned_df["volatility"].fillna(0.02)  # Default 2% vol
         
         # Build states list
         self._states = []

@@ -28,6 +28,7 @@ class Agent(Base):
     user = relationship("User", back_populates="agents")
     round = relationship("Round", back_populates="agents")
     result = relationship("AgentResult", back_populates="agent", uselist=False, cascade="all, delete-orphan")
+    trades = relationship("Trade", back_populates="agent", cascade="all, delete-orphan", passive_deletes=True)
     
     # Unique constraint: one agent per user per round
     __table_args__ = (
