@@ -643,6 +643,7 @@ Get the global leaderboard aggregating user performance across all completed rou
   "total_rounds_analyzed": 10,
   "highest_avg_sharpe": 1.8,
   "highest_avg_return": 12.5,
+  "highest_avg_alpha": 5.2,
   "most_rounds_participated": 8
 }
 ```

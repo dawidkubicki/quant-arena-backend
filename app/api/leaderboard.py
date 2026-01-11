@@ -353,6 +353,7 @@ def get_global_leaderboard(
     # Calculate summary stats
     sharpe_values = [e.avg_sharpe_ratio for e in ranked_entries if e.avg_sharpe_ratio is not None]
     return_values = [e.avg_total_return for e in ranked_entries]
+    alpha_values = [e.avg_alpha for e in ranked_entries if e.avg_alpha is not None]
     participation_values = [e.total_rounds for e in ranked_entries]
     
     return GlobalLeaderboardResponse(
@@ -361,6 +362,7 @@ def get_global_leaderboard(
         total_rounds_analyzed=len(completed_rounds),
         highest_avg_sharpe=max(sharpe_values) if sharpe_values else None,
         highest_avg_return=max(return_values) if return_values else None,
+        highest_avg_alpha=max(alpha_values) if alpha_values else None,
         most_rounds_participated=max(participation_values) if participation_values else 0
     )
 

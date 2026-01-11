@@ -78,4 +78,5 @@ class GlobalLeaderboardResponse(BaseModel):
     # Summary stats
     highest_avg_sharpe: Optional[float] = None
     highest_avg_return: Optional[float] = None
+    highest_avg_alpha: Optional[float] = None
     most_rounds_participated: int = 0
